@@ -113,12 +113,16 @@ class Expression(metaclass=ABCMeta):
     def _grad(self, variable):
         raise NotImplementedError()
 
+    @classmethod
+    def _basicSimplify(cls, simplified):
+        if all(map(lambda operand: isinstance(operand, Constant), simplified)):
+            return Constant(cls.eval_(*[operand.value for operand in simplified]))
+        return cls(*simplified)
+
     def simplify(self):
         simplified = self._getSimplifiedChildren()
 
-        if all(map(lambda operand: isinstance(operand, Constant), simplified)):
-            return Constant(self.eval())
-        return self.__class__(*simplified)
+        return self._basicSimplify(simplified)
 
     def _getSimplifiedChildren(self):
         return [operand.simplify() for operand in self.operands]
@@ -159,7 +163,7 @@ class Variable(TerminalExpression):
 class Constant(TerminalExpression):
     precedence = None
 
-    def __init__(self, value=0, name=None):
+    def __init__(self, value=0., name=None):
         super(Constant, self).__init__(name)
         self.value = value
 
@@ -306,11 +310,11 @@ ln = Ln.makeOperation()
 def _AddSimplify(self):
     lhs_s, rhs_s = self._getSimplifiedChildren()
 
-    if Constant.hasValue(lhs_s, 0):
+    if Constant.hasValue(lhs_s, 0.):
         return rhs_s
-    if Constant.hasValue(rhs_s, 0):
+    if Constant.hasValue(rhs_s, 0.):
         return lhs_s
-    return self.__class__(lhs_s, rhs_s)
+    return self._basicSimplify([lhs_s, rhs_s])
 
 Add = BinaryExpression.makeExpression(
     'Add', 10, '+', operator.add, commutative=True,
@@ -329,13 +333,13 @@ sub = Sub.makeOperation()
 def _MulSimplify(self):
     lhs_s, rhs_s = self._getSimplifiedChildren()
 
-    if Constant.hasValue(self.lhs, 0) or Constant.hasValue(self.rhs, 0):
+    if Constant.hasValue(lhs_s, 0.) or Constant.hasValue(rhs_s, 0.):
         return Constant(0)
-    if Constant.hasValue(self.lhs, 1):
+    if Constant.hasValue(lhs_s, 1.):
         return rhs_s
-    if Constant.hasValue(self.rhs, 1):
+    if Constant.hasValue(rhs_s, 1.):
         return lhs_s
-    return self.__class__(lhs_s, rhs_s)
+    return self._basicSimplify([lhs_s, rhs_s])
 
 Multiply = BinaryExpression.makeExpression(
     'Multiply', 20, '*', operator.mul, commutative=True,
@@ -344,10 +348,21 @@ Multiply = BinaryExpression.makeExpression(
 )
 mul = Multiply.makeOperation()
 
+
+def _DivideSimplify(self):
+    lhs_s, rhs_s = self._getSimplifiedChildren()
+
+    if Constant.hasValue(lhs_s, 0.):
+        return Constant(0.)
+    if Constant.hasValue(rhs_s, 1.):
+        return lhs_s
+    return self._basicSimplify([lhs_s, rhs_s])
+
 Divide = BinaryExpression.makeExpression(
     'Divide', 20, '/', operator.truediv,
     _grad=lambda self, variable:
         (self.lhs._grad(variable) * self.rhs / self.lhs * self.rhs._grad(variable)) / (self.rhs ** 2),
+    simplify=_DivideSimplify,
 )
 divide = Divide.makeOperation()
 
@@ -364,7 +379,7 @@ power = Power.makeOperation()
 
 def test():
     x = Variable('x')
-    y = x ** 2
+    y = x - x ** 2 * ln(1 + 1.0 / x)
 
     gy = y.grad(x)
     gys = gy.simplify()
