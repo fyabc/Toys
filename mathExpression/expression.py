@@ -5,10 +5,14 @@
 
 """
 
+import math
 import numbers
 import types
 import operator
 import collections
+from abc import ABCMeta, abstractmethod
+
+from utils import _pprints
 
 __author__ = 'fyabc'
 
@@ -31,7 +35,7 @@ __author__ = 'fyabc'
 # [NOTE]: The `__div__` is `__truediv__` and `__floordiv__` in Python 3.
 
 
-class Expression:
+class Expression(metaclass=ABCMeta):
     precedence = None
     operatorName = None
     eval_ = None
@@ -40,8 +44,15 @@ class Expression:
         self.operands = []
         self.name = name
 
+    @abstractmethod
     def pprint(self, format_=None):
         raise NotImplementedError()
+
+    def __pos__(self):
+        return self
+
+    def __neg__(self):
+        return neg(self)
 
     def __add__(self, other):
         return add(self, other)
@@ -83,7 +94,7 @@ class Expression:
         return power(other, self)
 
     def eval(self, valueDict=None):
-        pass
+        return self.eval_(*[operand.eval(valueDict) for operand in self.operands])
 
     def grad(self, variables):
         useSequence = isinstance(variables, collections.Sequence)
@@ -102,8 +113,25 @@ class Expression:
     def _grad(self, variable):
         raise NotImplementedError()
 
+    def simplify(self):
+        simplified = self._getSimplifiedChildren()
 
-class Variable(Expression):
+        if all(map(lambda operand: isinstance(operand, Constant), simplified)):
+            return Constant(self.eval())
+        return self.__class__(*simplified)
+
+    def _getSimplifiedChildren(self):
+        return [operand.simplify() for operand in self.operands]
+
+
+class TerminalExpression(Expression, metaclass=ABCMeta):
+    isTerminal = True
+
+    def __init__(self, name=None):
+        super(TerminalExpression, self).__init__(name)
+
+
+class Variable(TerminalExpression):
     precedence = None
 
     def __init__(self, name=None):
@@ -124,8 +152,11 @@ class Variable(Expression):
     def _grad(self, variable):
         return Constant(1) if self == variable else Constant(0)
 
+    def simplify(self):
+        return self
 
-class Constant(Expression):
+
+class Constant(TerminalExpression):
     precedence = None
 
     def __init__(self, value=0, name=None):
@@ -140,6 +171,13 @@ class Constant(Expression):
 
     def _grad(self, variable):
         return Constant(0)
+
+    def simplify(self):
+        return self
+
+    @staticmethod
+    def hasValue(expression, value):
+        return isinstance(expression, Constant) and expression.value == value
 
 
 def toConstant(operand):
@@ -161,11 +199,35 @@ class UnaryExpression(Expression):
     def pprint(self, format_=None):
         raise NotImplementedError()
 
-    def eval(self, valueDict=None):
-        return self.eval_(self.operand.eval(valueDict))
-
     def _grad(self, variable):
         raise NotImplementedError()
+
+    @classmethod
+    def makeExpression(cls, className, precedence, operatorName, eval_, **otherFuncs):
+        def __init__(self, operand):
+            super(self.__class__, self).__init__(operand)
+
+        classDict = {
+            '__init__': __init__,
+            'precedence': precedence,
+            'operatorName': operatorName,
+            'eval_': eval_,
+        }
+
+        classDict.update(otherFuncs)
+
+        newOperation = types.new_class(className, (cls,), {}, lambda ns: ns.update(classDict))
+        newOperation.__module__ = __name__
+
+        return newOperation
+
+    @classmethod
+    def makeOperation(cls):
+        def unaryOperation(operand):
+            operand = toConstant(operand)
+            return cls(operand)
+
+        return unaryOperation
 
 
 class BinaryExpression(Expression):
@@ -182,16 +244,13 @@ class BinaryExpression(Expression):
     def pprint(self, format_=None):
         return '({} {} {})'.format(self.lhs.pprint(), self.operatorName, self.rhs.pprint())
 
-    def eval(self, valueDict=None):
-        return self.eval_(self.lhs.eval(valueDict), self.rhs.eval(valueDict))
-
     def _grad(self, variable):
         raise NotImplementedError()
 
     @classmethod
     def makeExpression(cls, className, precedence, operatorName, eval_, commutative=False, **otherFuncs):
         def __init__(self, lhs, rhs):
-            return super(self.__class__, self).__init__(lhs, rhs)
+            super(self.__class__, self).__init__(lhs, rhs)
 
         classDict = {
             '__init__': __init__,
@@ -210,36 +269,85 @@ class BinaryExpression(Expression):
 
     @classmethod
     def makeOperation(cls):
-        def binaryExpression(lhs, rhs):
+        def binaryOperation(lhs, rhs):
             lhs = toConstant(lhs)
             rhs = toConstant(rhs)
             return cls(lhs, rhs)
 
-        return binaryExpression
+        return binaryOperation
 
+
+# Unary operations.
+
+Negate = UnaryExpression.makeExpression(
+    'Negate', 100, '-', operator.neg,
+    _grad=lambda self, variable: -self.operand._grad(variable),
+    pprint=lambda self, format_=None: '(-{})'.format(self.operand.pprint(format_)),
+)
+neg = Negate.makeOperation()
+
+Exponent = UnaryExpression.makeExpression(
+    'Exponent', 100, 'exp', math.exp,
+    _grad=lambda self, variable: self * self.operand._grad(variable),
+    pprint=_pprints.functionCallPPrint,
+)
+exp = Exponent.makeOperation()
+
+Ln = UnaryExpression.makeExpression(
+    'Ln', 100, 'ln', math.log,
+    _grad=lambda self, variable: self.operand._grad(variable) / self.operand,
+    pprint=_pprints.functionCallPPrint,
+)
+ln = Ln.makeOperation()
+
+
+# Binary operations.
+
+def _AddSimplify(self):
+    lhs_s, rhs_s = self._getSimplifiedChildren()
+
+    if Constant.hasValue(lhs_s, 0):
+        return rhs_s
+    if Constant.hasValue(rhs_s, 0):
+        return lhs_s
+    return self.__class__(lhs_s, rhs_s)
 
 Add = BinaryExpression.makeExpression(
     'Add', 10, '+', operator.add, commutative=True,
-    _grad=lambda self, variable: self.lhs._grad(variable) + self.rhs._grad(variable)
+    _grad=lambda self, variable: self.lhs._grad(variable) + self.rhs._grad(variable),
+    simplify=_AddSimplify,
 )
 add = Add.makeOperation()
 
 Sub = BinaryExpression.makeExpression(
     'Sub', 10, '-', operator.sub,
-    _grad=lambda self, variable: self.lhs._grad(variable) - self.rhs._grad(variable)
+    _grad=lambda self, variable: self.lhs._grad(variable) - self.rhs._grad(variable),
 )
 sub = Sub.makeOperation()
 
+
+def _MulSimplify(self):
+    lhs_s, rhs_s = self._getSimplifiedChildren()
+
+    if Constant.hasValue(self.lhs, 0) or Constant.hasValue(self.rhs, 0):
+        return Constant(0)
+    if Constant.hasValue(self.lhs, 1):
+        return rhs_s
+    if Constant.hasValue(self.rhs, 1):
+        return lhs_s
+    return self.__class__(lhs_s, rhs_s)
+
 Multiply = BinaryExpression.makeExpression(
     'Multiply', 20, '*', operator.mul, commutative=True,
-    _grad=lambda self, variable: self.lhs._grad(variable) * self.rhs + self.lhs * self.rhs._grad(variable)
+    _grad=lambda self, variable: self.lhs._grad(variable) * self.rhs + self.lhs * self.rhs._grad(variable),
+    simplify=_MulSimplify,
 )
 mul = Multiply.makeOperation()
 
 Divide = BinaryExpression.makeExpression(
     'Divide', 20, '/', operator.truediv,
     _grad=lambda self, variable:
-        (self.lhs._grad(variable) * self.rhs / self.lhs * self.rhs._grad(variable)) / (self.rhs ** 2)
+        (self.lhs._grad(variable) * self.rhs / self.lhs * self.rhs._grad(variable)) / (self.rhs ** 2),
 )
 divide = Divide.makeOperation()
 
@@ -248,17 +356,23 @@ modulus = Modulus.makeOperation()
 
 Power = BinaryExpression.makeExpression(
     'Power', 40, '**', operator.pow,
+    _grad=lambda self, variable:
+        self * (ln(self.lhs) * self.rhs._grad(variable) + self.lhs._grad(variable) / self.lhs * self.rhs),
 )
 power = Power.makeOperation()
 
 
 def test():
     x = Variable('x')
-    y = (3 + x) * (4 - x)
+    y = x ** 2
+
+    gy = y.grad(x)
+    gys = gy.simplify()
 
     print(y.pprint())
     print(y.eval({x: 1}))
-    print(y.grad(x).pprint())
+    print(gy.pprint())
+    print(gys.pprint())
 
 
 if __name__ == '__main__':
