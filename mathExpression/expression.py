@@ -58,9 +58,9 @@ class Expression(metaclass=ABCMeta):
         operandsPPrint = ', '.join(map(lambda operand: operand.pprint(format_), self.operands))
 
         if len(self.operands) == 1 and hasattr(self.operands[0], 'isTerminal'):
-            formatString = '{}({})'
+            formatString = '({}({}))'
         else:
-            formatString = '{}{}'
+            formatString = '({}{})'
         return formatString.format(self.operatorName, operandsPPrint)
 
     def __pos__(self):
@@ -98,6 +98,9 @@ class Expression(metaclass=ABCMeta):
 
     def __rpow__(self, other):
         return power(other, self)
+
+    def __call__(self, valueDict=None):
+        return self.eval(valueDict)
 
     def eval(self, valueDict=None):
         return self.eval_(*[operand.eval(valueDict) for operand in self.operands])
@@ -237,6 +240,11 @@ class UnaryExpression(Expression):
 
         return unaryOperation
 
+    @classmethod
+    def make(cls, className, precedence, operatorName, eval_, **otherFuncs):
+        expression = cls.makeExpression(className, precedence, operatorName, eval_, **otherFuncs)
+        return expression, expression.makeOperation()
+
 
 class BinaryExpression(Expression):
     precedence = None
@@ -284,51 +292,49 @@ class BinaryExpression(Expression):
 
         return binaryOperation
 
+    @classmethod
+    def make(cls, className, precedence, operatorName, eval_, commutative=False, **otherFuncs):
+        expression = cls.makeExpression(className, precedence, operatorName, eval_, commutative=False, **otherFuncs)
+        return expression, expression.makeOperation()
+
 
 # Unary operations.
 
-Negate = UnaryExpression.makeExpression(
+Negate, neg = UnaryExpression.make(
     'Negate', 'function', '-', operator.neg,
     _grad=lambda self, variable: -self.operand._grad(variable),
     pprint=lambda self, format_=None: '(-{})'.format(self.operand.pprint(format_)),
 )
-neg = Negate.makeOperation()
 
-Exponent = UnaryExpression.makeExpression(
+Exponent, exp = UnaryExpression.make(
     'Exponent', 'function', 'exp', math.exp,
     _grad=lambda self, variable: self * self.operand._grad(variable),
 )
-exp = Exponent.makeOperation()
 
-Ln = UnaryExpression.makeExpression(
+Ln, ln = UnaryExpression.make(
     'Ln', 'function', 'ln', math.log,
     _grad=lambda self, variable: self.operand._grad(variable) / self.operand,
 )
-ln = Ln.makeOperation()
 
-Sine = UnaryExpression.makeExpression(
+Sine, sin = UnaryExpression.make(
     'Sine', 'function', 'sin', math.sin,
     _grad=lambda self, variable: self.operand._grad(variable) * cos(self.operand),
 )
-sin = Sine.makeOperation()
 
-Cosine = UnaryExpression.makeExpression(
+Cosine, cos = UnaryExpression.make(
     'Cosine', 'function', 'cos', math.cos,
     _grad=lambda self, variable: -self.operand._grad(variable) * sin(self.operand),
 )
-cos = Cosine.makeOperation()
 
-Tangent = UnaryExpression.makeExpression(
+Tangent, tan = UnaryExpression.make(
     'Tangent', 'function', 'tan', math.tan,
     _grad=lambda self, variable: self.operand._grad(variable) / (cos(self.operand) ** 2),
 )
-tan = Tangent.makeOperation()
 
-Cotangent = UnaryExpression.makeExpression(
+Cotangent, cot = UnaryExpression.make(
     'Cotangent', 'function', 'cot', lambda x: 1.0 / math.tan(x),
     _grad=lambda self, variable: -self.operand._grad(variable) / (sin(self.operand) ** 2),
 )
-cot = Cotangent.makeOperation()
 
 
 # Binary operations.
@@ -342,18 +348,16 @@ def _AddSimplify(self):
         return lhs_s
     return self._basicSimplify([lhs_s, rhs_s])
 
-Add = BinaryExpression.makeExpression(
+Add, add = BinaryExpression.make(
     'Add', _precedences['add'], '+', operator.add, commutative=True,
     _grad=lambda self, variable: self.lhs._grad(variable) + self.rhs._grad(variable),
     simplify=_AddSimplify,
 )
-add = Add.makeOperation()
 
-Sub = BinaryExpression.makeExpression(
+Sub, sub = BinaryExpression.make(
     'Sub', _precedences['add'], '-', operator.sub,
     _grad=lambda self, variable: self.lhs._grad(variable) - self.rhs._grad(variable),
 )
-sub = Sub.makeOperation()
 
 
 def _MulSimplify(self):
@@ -367,12 +371,11 @@ def _MulSimplify(self):
         return lhs_s
     return self._basicSimplify([lhs_s, rhs_s])
 
-Multiply = BinaryExpression.makeExpression(
+Multiply, mul = BinaryExpression.make(
     'Multiply', _precedences['mul'], '*', operator.mul, commutative=True,
     _grad=lambda self, variable: self.lhs._grad(variable) * self.rhs + self.lhs * self.rhs._grad(variable),
     simplify=_MulSimplify,
 )
-mul = Multiply.makeOperation()
 
 
 def _DivideSimplify(self):
@@ -384,35 +387,33 @@ def _DivideSimplify(self):
         return lhs_s
     return self._basicSimplify([lhs_s, rhs_s])
 
-Divide = BinaryExpression.makeExpression(
+Divide, divide = BinaryExpression.make(
     'Divide', _precedences['mul'], '/', operator.truediv,
     _grad=lambda self, variable:
         (self.lhs._grad(variable) * self.rhs / self.lhs * self.rhs._grad(variable)) / (self.rhs ** 2),
     simplify=_DivideSimplify,
 )
-divide = Divide.makeOperation()
 
 
-Power = BinaryExpression.makeExpression(
+Power, power = BinaryExpression.make(
     'Power', _precedences['power'], '**', operator.pow,
     _grad=lambda self, variable:
         self * (ln(self.lhs) * self.rhs._grad(variable) + self.lhs._grad(variable) / self.lhs * self.rhs),
 )
-power = Power.makeOperation()
 
 
 def test():
     x = Variable('x')
-    y = sin(x)
+    y = sin(sin(x))
 
     gy = y.grad(x)
     gys = gy.simplify()
 
     print(y.pprint())
-    print(y.eval({x: 4}))
+    print(y({x: 4}))
     print(gy.pprint())
     print(gys.pprint())
-    print(gys.eval({x: 2}))
+    print(gys({x: 2}))
 
 
 if __name__ == '__main__':
