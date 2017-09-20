@@ -92,3 +92,4 @@ ENV/
 # Pycharm Project Settings
 .idea/
 /LearnTensorFlow/MNIST_data/
+/LearnTensorFlow/output

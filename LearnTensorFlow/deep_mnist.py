@@ -90,6 +90,10 @@ def main():
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+
+        # Summary
+        summary_writer = tf.summary.FileWriter('./output/deep_mnist_logs', sess.graph)
+
         start_time = time.time()
 
         for i in range(TrainIteration):

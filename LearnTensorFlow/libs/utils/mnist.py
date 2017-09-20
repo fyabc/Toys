@@ -34,8 +34,8 @@ def load_data():
 
 def input_placeholders():
     # Input placeholder, None in shape means any size.
-    x = _tf.placeholder(floatX, [None, ImageSize])
+    x = _tf.placeholder(floatX, [None, ImageSize], name='x')
     # Get ground truth labels.
-    y_ = _tf.placeholder(floatX, [None, LabelSize])
+    y_ = _tf.placeholder(floatX, [None, LabelSize], name='y')
 
     return x, y_
