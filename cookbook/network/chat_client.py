@@ -67,7 +67,10 @@ class ChatClient:
         # we've disconnected.
         input_text = True
         while input_text:
-            input_text = _recv(self.input)
+            try:
+                input_text = _recv(self.input)
+            except ConnectionError:
+                break
             if input_text:
                 print(input_text.strip())
         propagate_standard_input.done = True
@@ -89,7 +92,7 @@ class ChatClient:
             """Echo standard input to the chat server until told to stop."""
 
             while not self.done:
-                input_text = input()  # no need to decode when read from stdin
+                input_text = input()
                 if input_text:
                     _send(self.output, input_text + '\r\n')
 
