@@ -91,5 +91,8 @@ ENV/
 
 # Pycharm Project Settings
 .idea/
+
+# TensorFlow data and output files
 /LearnTensorFlow/MNIST_data/
+/LearnTensorFlow/CIFAR10_data/
 /LearnTensorFlow/output

@@ -4,11 +4,33 @@
 import numpy as np
 import sklearn.preprocessing as prep
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from libs.models.auto_encoder import AdditiveGaussianNoiseAutoEncoder
 from libs.utils.mnist import load_data
 
 __author__ = 'fyabc'
+
+
+def show_image(image_list, image_recons_list):
+    N = len(image_list)
+    for i, (image, image_recons) in enumerate(zip(image_list, image_recons_list)):
+        image = image.reshape((28, 28))
+        image_recons = image_recons.reshape((28, 28))
+
+        plt.subplot(2, N, i + 1)
+        plt.imshow(image, cmap='gray')
+        plt.subplot(2, N, N + i + 1)
+        plt.imshow(image_recons, cmap='gray')
+
+    plt.show()
+
+
+def test_recons(auto_encoder, X_test, start_index=0, end_index=0):
+    """Reconstruct and show some images."""
+    image_list = X_test[start_index: end_index + 1]
+    image_recons_list = auto_encoder.reconstruct(image_list)
+    show_image(image_list, image_recons_list)
 
 
 def standard_scale(X_train, X_test):
@@ -55,6 +77,9 @@ def main():
             print('Epoch: {:04d} cost={:.9f}'.format(epoch, avg_cost))
 
     print('Total cost: {:.9f}'.format(auto_encoder.total_cost(X_test)))
+
+    test_recons(auto_encoder, X_test, 0, 5)
+
 
 if __name__ == '__main__':
     main()
