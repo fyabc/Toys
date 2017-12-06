@@ -17,7 +17,7 @@ BatchSize = 100
 LearningRate = 0.5
 
 
-def load_data():
+def load_data(data_dir='MNIST_data/', one_hot=True):
     """
     Get MNIST dataset.
     [NOTE] MNIST dataset attribute:
@@ -28,7 +28,7 @@ def load_data():
     mnist.train.images: (55000, 784) of float
     mnist.train.labels: (55000, 10) of float
     """
-    mnist = input_data.read_data_sets('MNIST_data/', one_hot=True)
+    mnist = input_data.read_data_sets(train_dir=data_dir, one_hot=one_hot)
     return mnist
 
 
