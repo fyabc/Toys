@@ -38,6 +38,11 @@ flags.DEFINE_boolean(
 )
 
 
+def _collection_name(is_training):
+    _s = 'TrainingData' if is_training else 'TestData'
+    return '{}/images'.format(_s), '{}/labels'.format(_s)
+
+
 class IteratorInitializerHook(tf.train.SessionRunHook):
     """Hook to initialize data iterator after Session is created."""
 
@@ -57,6 +62,7 @@ class IteratorInitializerHook(tf.train.SessionRunHook):
 
 class FeedInputHook(tf.train.SessionRunHook):
     def __init__(self, images, labels, batch_size, is_training):
+        super(FeedInputHook, self).__init__()
         self.images = images
         self.labels = labels
         self.data_size = len(self.labels)
@@ -86,9 +92,9 @@ class FeedInputHook(tf.train.SessionRunHook):
             batch_end = batch_start + self.batch_size
             batch_images, batch_labels = self.images[batch_start:batch_end], self.labels[batch_start:batch_end]
 
-        with tf.variable_scope('TrainingData' if self.is_training else 'TestData', reuse=True):
-            next_sample = tf.get_variable('next_sample', dtype=self.images.dtype)
-            next_labels = tf.get_variable('next_labels', dtype=self.labels.dtype)
+        _c_images, _c_labels = _collection_name(self.is_training)
+        next_sample = run_context.session.graph.get_collection_ref(_c_images)[0]
+        next_labels = run_context.session.graph.get_collection_ref(_c_labels)[0]
 
         self.n_batches += 1
 
@@ -111,8 +117,7 @@ class FeedInputHook(tf.train.SessionRunHook):
 
     def after_run(self, run_context, run_values):
         # In test mode, stop after one epoch.
-        # (Stop when next batch is not full)
-        if not self.is_training and self.batch_size * (self.n_batches + 1) > self.data_size:
+        if not self.is_training and self.batch_size * self.n_batches >= self.data_size:
             run_context.request_stop()
 
         # [NOTE]: loss and other variables are stored in `run_values`.
@@ -130,27 +135,17 @@ def get_input2(batch_size: int, mnist_data, mode):
         labels = mnist_data.test.labels.astype('int32')
 
     def input_fn():
-        with tf.variable_scope('TrainingData', reuse=tf.AUTO_REUSE):
-            # [NOTE] Can't use `tf.Variable` here. `tf.Variable` will not register the variable into scope.
-            train_next_sample = tf.get_variable(
-                name='next_sample', shape=[batch_size, 28, 28, 1], dtype=images.dtype, trainable=False)
-            train_next_labels = tf.get_variable(
-                name='next_labels', shape=[batch_size], dtype=labels.dtype, trainable=False)
+        with tf.name_scope('TrainingData' if is_training else 'TestData'):
+            next_sample = tf.placeholder(dtype=images.dtype, shape=[None, 28, 28, 1], name='next_sample')
+            next_labels = tf.placeholder(dtype=labels.dtype, shape=[None], name='next_label')
 
-        # [NOTE]: Create test input variable here in advance, or it will not be stored into checkpoint,
-        # then will cause error that can't find these variables.
-        with tf.variable_scope('TestData', reuse=tf.AUTO_REUSE):
-            # [NOTE] A bug: I must set fully defined shape, so I can't use dynamic batch size
-            # (such as the final batch (not full) of the test data.
-            test_next_sample = tf.get_variable(
-                name='next_sample', shape=[batch_size, 28, 28, 1], dtype=images.dtype, trainable=False)
-            test_next_labels = tf.get_variable(
-                name='next_labels', shape=[batch_size], dtype=labels.dtype, trainable=False)
+            _c_images, _c_labels = _collection_name(is_training)
+            if next_sample not in tf.get_collection_ref(_c_images):
+                tf.add_to_collection(_c_images, next_sample)
+            if next_labels not in tf.get_collection_ref(_c_labels):
+                tf.add_to_collection(_c_labels, next_labels)
 
-        if is_training:
-            return train_next_sample, train_next_labels
-        else:
-            return test_next_sample, test_next_labels
+        return next_sample, next_labels
 
     feed_input_hook = FeedInputHook(images, labels, batch_size, is_training)
 
