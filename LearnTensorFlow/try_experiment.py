@@ -36,6 +36,10 @@ flags.DEFINE_boolean(
     flag_name='which_input', default_value=True,
     docstring='Which input to use, False = dataset, True = manual input. [True]'
 )
+flags.DEFINE_boolean(
+    flag_name='hook2', default_value=False,
+    docstring='Use `FeedInputHook2`. [False]'
+)
 
 
 def _collection_name(is_training):
@@ -61,6 +65,7 @@ class IteratorInitializerHook(tf.train.SessionRunHook):
 
 
 class FeedInputHook(tf.train.SessionRunHook):
+    """Read data manually, then feed it into placeholders."""
     def __init__(self, images, labels, batch_size, is_training):
         super(FeedInputHook, self).__init__()
         self.images = images
@@ -69,6 +74,19 @@ class FeedInputHook(tf.train.SessionRunHook):
         self.batch_size = batch_size
         self.is_training = is_training
         self.n_batches = 0
+
+        self.next_sample_ph = None
+        self.next_labels_ph = None
+
+    def make_placeholder(self):
+        with tf.name_scope('TrainingData' if self.is_training else 'TestData'):
+            next_sample = tf.placeholder(dtype=self.images.dtype, shape=[None, 28, 28, 1], name='next_sample')
+            next_labels = tf.placeholder(dtype=self.labels.dtype, shape=[None], name='next_label')
+
+            self.next_sample_ph = next_sample
+            self.next_labels_ph = next_labels
+
+        return next_sample, next_labels
 
     def begin(self):
         # Reset the counter in testing mode.
@@ -92,9 +110,8 @@ class FeedInputHook(tf.train.SessionRunHook):
             batch_end = batch_start + self.batch_size
             batch_images, batch_labels = self.images[batch_start:batch_end], self.labels[batch_start:batch_end]
 
-        _c_images, _c_labels = _collection_name(self.is_training)
-        next_sample = run_context.session.graph.get_collection_ref(_c_images)[0]
-        next_labels = run_context.session.graph.get_collection_ref(_c_labels)[0]
+        next_sample = self.next_sample_ph
+        next_labels = self.next_labels_ph
 
         self.n_batches += 1
 
@@ -124,7 +141,90 @@ class FeedInputHook(tf.train.SessionRunHook):
         # The hook can get them to implement some algorithms, such as self-paced learning.
 
 
-def get_input2(batch_size: int, mnist_data, mode):
+class FeedInputHook2(tf.train.SessionRunHook):
+    """Read data from `Dataset`, then feed it into placeholders."""
+    def __init__(self, images, labels, batch_size, is_training):
+        super(FeedInputHook2, self).__init__()
+        self.images = images
+        self.labels = labels
+        self.batch_size = batch_size
+        self.is_training = is_training
+        self.n_batches = 0
+
+        self.next_sample = None
+        self.next_labels = None
+        self.next_sample_ph = None
+        self.next_labels_ph = None
+        self.init_dataset_fn = None
+
+    def after_create_session(self, session, coord):
+        self.init_dataset_fn(session)
+
+    def make_placeholder(self):
+        with tf.name_scope('TrainingData' if self.is_training else 'TestData'):
+            images_placeholder = tf.placeholder(self.images.dtype, self.images.shape, name='images')
+            labels_placeholder = tf.placeholder(self.labels.dtype, self.labels.shape, name='labels')
+
+            # [NOTE]: Must use tuple here
+            dataset = Dataset.from_tensor_slices((images_placeholder, labels_placeholder))
+            if self.is_training:
+                dataset = dataset.repeat(None)  # Infinite iterations
+                dataset = dataset.shuffle(buffer_size=10000)
+            dataset = dataset.batch(self.batch_size)
+            iterator = dataset.make_initializable_iterator()
+
+            # TrainingData/IteratorGetNext:0, TrainingData/IteratorGetNext:1
+            self.next_sample, self.next_labels = iterator.get_next()
+
+            # Make placeholders
+            self.next_sample_ph = tf.placeholder(
+                dtype=self.next_sample.dtype, shape=self.next_sample.shape, name='next_sample')
+            self.next_labels_ph = tf.placeholder(
+                dtype=self.next_labels.dtype, shape=self.next_labels.shape, name='next_label')
+
+            self.init_dataset_fn = lambda session: session.run(
+                iterator.initializer,
+                feed_dict={
+                    images_placeholder: self.images,
+                    labels_placeholder: self.labels,
+                }
+            )
+
+        return self.next_sample_ph, self.next_labels_ph
+
+    def begin(self):
+        # Reset the counter in testing mode.
+        # [NOTE] Shall I also reset it in training mode?
+        if not self.is_training:
+            self.n_batches = 0
+
+    def before_run(self, run_context: tf.train.SessionRunContext):
+        batch_images, batch_labels = run_context.session.run([self.next_sample, self.next_labels])
+
+        self.n_batches += 1
+
+        # Add next batch data into feed dict.
+        orig_feed_dict = run_context.original_args.feed_dict
+        if orig_feed_dict is None:
+            orig_feed_dict = {}
+        else:
+            orig_feed_dict = orig_feed_dict.copy()
+        orig_feed_dict.update({
+            self.next_sample_ph: batch_images,
+            self.next_labels_ph: batch_labels,
+        })
+
+        return tf.train.SessionRunArgs(
+            fetches=run_context.original_args.fetches,
+            feed_dict=orig_feed_dict,
+            options=run_context.original_args.options,
+        )
+
+    def after_run(self, run_context, run_values):
+        pass
+
+
+def get_input2(batch_size: int, mnist_data, mode, **kwargs):
     is_training = mode == ModeKeys.TRAIN
 
     if is_training:
@@ -134,25 +234,19 @@ def get_input2(batch_size: int, mnist_data, mode):
         images = mnist_data.test.images.reshape([-1, 28, 28, 1])
         labels = mnist_data.test.labels.astype('int32')
 
+    if kwargs.pop('hook2', False) is True:
+        hook_class = FeedInputHook2
+    else:
+        hook_class = FeedInputHook
+    feed_input_hook = hook_class(images, labels, batch_size, is_training)
+
     def input_fn():
-        with tf.name_scope('TrainingData' if is_training else 'TestData'):
-            next_sample = tf.placeholder(dtype=images.dtype, shape=[None, 28, 28, 1], name='next_sample')
-            next_labels = tf.placeholder(dtype=labels.dtype, shape=[None], name='next_label')
-
-            _c_images, _c_labels = _collection_name(is_training)
-            if next_sample not in tf.get_collection_ref(_c_images):
-                tf.add_to_collection(_c_images, next_sample)
-            if next_labels not in tf.get_collection_ref(_c_labels):
-                tf.add_to_collection(_c_labels, next_labels)
-
-        return next_sample, next_labels
-
-    feed_input_hook = FeedInputHook(images, labels, batch_size, is_training)
+        return feed_input_hook.make_placeholder()
 
     return input_fn, feed_input_hook
 
 
-def get_input(batch_size: int, mnist_data, mode):
+def get_input(batch_size: int, mnist_data, mode, **kwargs):
     is_training = mode == ModeKeys.TRAIN
 
     iterator_initializer_hook = IteratorInitializerHook()
@@ -282,8 +376,10 @@ def experiment_fn(run_config: RunConfig, params: HParams):
         get_input_fn = get_input2
     else:
         get_input_fn = get_input
-    train_input_fn, train_input_hook = get_input_fn(FLAGS.batch_size, mnist_data, mode=ModeKeys.TRAIN)
-    eval_input_fn, eval_input_hook = get_input_fn(FLAGS.batch_size, mnist_data, mode=ModeKeys.EVAL)
+    train_input_fn, train_input_hook = get_input_fn(
+        FLAGS.batch_size, mnist_data, mode=ModeKeys.TRAIN, hook2=FLAGS.hook2)
+    eval_input_fn, eval_input_hook = get_input_fn(
+        FLAGS.batch_size, mnist_data, mode=ModeKeys.EVAL, hook2=FLAGS.hook2)
 
     experiment = Experiment(
         estimator=estimator,
