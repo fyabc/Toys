@@ -96,6 +96,7 @@ ENV/
 /LearnTensorFlow/MNIST_data/
 /LearnTensorFlow/CIFAR10_data/
 /LearnTensorFlow/output
+/LearnTensorFlow/PRLabCurves
 
 # ASCII arts
 /ascii_art/images

@@ -23,7 +23,7 @@ __author__ = 'fyabc'
 
 class MainApp(QtWidgets.QMainWindow):
     def __init__(self):
-        super().__init__()
+        super(MainApp, self).__init__()
         self.ui = Ui_TaxCalculator()
         self.ui.setupUi(self)
 
