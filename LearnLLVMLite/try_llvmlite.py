@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from ctypes import CFUNCTYPE, c_int
-import sys
 
 import llvmlite.ir as ll
 import llvmlite.binding as llvm
@@ -25,9 +24,9 @@ func.args[0].name = 'a'
 func.args[1].name = 'b'
 
 bb_entry = func.append_basic_block('entry')
-irbuilder = ll.IRBuilder(bb_entry)
-tmp = irbuilder.add(func.args[0], func.args[1])
-ret = irbuilder.ret(tmp)
+ir_builder = ll.IRBuilder(bb_entry)
+tmp = ir_builder.add(func.args[0], func.args[1])
+ret = ir_builder.ret(tmp)
 
 print('=== LLVM IR')
 print(module)
@@ -45,8 +44,8 @@ with llvm.create_mcjit_compiler(llvm_module, tm) as ee:
 
     # Obtain a pointer to the compiled 'sum' - it's the address of its JITed
     # code in memory.
-    cfptr = ee.get_pointer_to_function(llvm_module.get_function('sum'))
-    # cfptr = ee.get_function_address('sum')
+    # cfptr = ee.get_pointer_to_function(llvm_module.get_function('sum'))
+    cfptr = ee.get_function_address('sum')
 
     # To convert an address to an actual callable thing we have to use
     # CFUNCTYPE, and specify the arguments & return type.
