@@ -45,8 +45,8 @@ with llvm.create_mcjit_compiler(llvm_module, tm) as ee:
 
     # Obtain a pointer to the compiled 'sum' - it's the address of its JITed
     # code in memory.
-    cfptr = ee.get_pointer_to_function(llvm_module.get_function('sum'))
-    # cfptr = ee.get_function_address('sum')
+    # cfptr = ee.get_pointer_to_function(llvm_module.get_function('sum'))
+    cfptr = ee.get_function_address('sum')
 
     # To convert an address to an actual callable thing we have to use
     # CFUNCTYPE, and specify the arguments & return type.
