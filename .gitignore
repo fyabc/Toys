@@ -100,3 +100,6 @@ ENV/
 
 # ASCII arts
 /ascii_art/images
+
+# Python ANTLR generated files
+/LearnPyANTLR/grammar/
