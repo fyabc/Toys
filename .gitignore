@@ -102,4 +102,4 @@ ENV/
 /ascii_art/images
 
 # Python ANTLR generated files
-/LearnPyANTLR/grammar/
+/LearnPyANTLR/*/grammar/
