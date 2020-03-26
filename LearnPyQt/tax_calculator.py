@@ -10,6 +10,7 @@ TYPED = False
 if TYPED:
     # 1. This need to use pyuic5 to compile the UI file, but has PyCharm type support.
     # $ pyuic5 tax_calculator.ui -o ui_tax_calculator.py
+    # or run 'pyuic5' command in PyCharm.
     try:
         from .ui_tax_calculator import Ui_TaxCalculator
     except SystemError:

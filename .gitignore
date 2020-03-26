@@ -103,3 +103,6 @@ ENV/
 
 # Python ANTLR generated files
 /LearnPyANTLR/*/grammar/
+
+# Generated maps
+/GenerateMap/maps/
