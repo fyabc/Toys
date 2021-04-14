@@ -69,7 +69,7 @@ def cone_landscape(self, scale=1., n_or_pos=5, decay_rate=5.):
     elevations = np.zeros_like(self.elevations)
     normalized_vertices = mu.scale_pos_height(self.vertices, self)
     for cone in cones:
-        elevations += mu.exp_2_dist(mu.distance(cone, normalized_vertices), decay_rate, scale)
+        elevations += mu.exp_2_dist(mu.all_distances(cone, normalized_vertices), decay_rate, scale)
     return elevations
 
 
@@ -117,7 +117,7 @@ def plateau_landscape(self, scale=1., n_or_pos=5, edge_dist=0.2, decay_rate=5.0)
     normalized_vertices = mu.scale_pos_height(self.vertices, self)
 
     for plateau in plateaus:
-        d = mu.distance(plateau, normalized_vertices)
+        d = mu.all_distances(plateau, normalized_vertices)
         e = mu.sigmoid(decay_rate * (edge_dist - d)) * scale
         elevations += e
     return elevations
@@ -138,7 +138,7 @@ def plateau_noise_landscape(self, scale=1., n_or_pos=5, edge_dist=0.2, seed=1):
     elevations = np.zeros_like(self.elevations)
     normalized_vertices = mu.scale_pos_height(self.vertices, self)
     for cone in cones:
-        distances = mu.distance(cone, normalized_vertices)
+        distances = mu.all_distances(cone, normalized_vertices)
         near_vertices = distances <= edge_dist
         elevations[near_vertices] += rng.uniform(-scale, scale, size=(np.sum(near_vertices),))
     return elevations

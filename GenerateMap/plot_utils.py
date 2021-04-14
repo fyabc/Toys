@@ -196,13 +196,16 @@ def _plot_cities(self):
     capital_pos = self.vertices[self.capitals]
     city_pos = self.vertices[self.cities]
 
-    plt.scatter(capital_pos[:, 0], capital_pos[:, 1], s=24, facecolors='w', edgecolors='k', zorder=3)
-    plt.scatter(city_pos[:, 0], city_pos[:, 1], s=15, facecolors='k', edgecolors='none', zorder=3)
+    plt.scatter(capital_pos[:, 0], capital_pos[:, 1], s=32, marker='*', facecolors='w', edgecolors='k', zorder=3)
+    plt.scatter(city_pos[:, 0], city_pos[:, 1], s=15, marker='o', facecolors='k', edgecolors='none', zorder=3)
 
 
 def plot_topographic_map(self, surface=True, river=True, cities=True):
+    title = None
+
     if surface:
         _plot_surface(self)
+        title = 'Elevation Map'
 
     if self.auto_render:
         _plot_auto_rivers(self)
@@ -215,7 +218,7 @@ def plot_topographic_map(self, surface=True, river=True, cities=True):
         _plot_cities(self)
 
     # TODO: Add height bar.
-    show_fig('Elevation map', self.width, self.height)
+    show_fig(title, self.width, self.height)
 
 
 def show_fig(title: str, width, height):
@@ -224,7 +227,8 @@ def show_fig(title: str, width, height):
     plt.xticks(np.linspace(0, width, num=11), [format(i / 10, '.1f') for i in range(11)])
     plt.yticks(np.linspace(0, height, num=11), [format(i / 10, '.1f') for i in range(11)])
 
-    plt.title(title)
+    if title:
+        plt.title(title)
     plt.grid()
 
     gcf = plt.gcf()

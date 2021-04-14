@@ -59,7 +59,7 @@ def get_water_flow(self, downhill, undersea=0.0):
 
 
 def _get_slopes(self, downhill, ext_elevations):
-    dist = mu.distance(self.vertices, self.vertices[downhill, :])
+    dist = mu.all_distances(self.vertices, self.vertices[downhill, :])
     slope = (self.elevations - ext_elevations[downhill]) / (dist + 1e-9)
     slope[downhill == -1] = 0
     return slope

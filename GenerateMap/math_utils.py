@@ -22,7 +22,7 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def distance(p, vertices):
+def all_distances(p, vertices):
     delta = vertices - p
     return np.hypot(delta[:, 0], delta[:, 1])
 
@@ -55,4 +55,4 @@ def normalize(elevations, lo=0., hi=1.):
 
 
 def nearest_vertex(p, vertices):
-    return np.argmin(distance(p, vertices))
+    return np.argmin(all_distances(p, vertices))
