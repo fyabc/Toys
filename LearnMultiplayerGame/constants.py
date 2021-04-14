@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+import pygame as _pygame
 from pygame.color import THECOLORS
 
 
@@ -36,12 +37,16 @@ CONF.U.BOARD_EDGES = {
 }
 CONF.U.BOARD_LINE_WIDTH = 2
 CONF.U.BOARD_EDGE_COLOR = THECOLORS['black']
-CONF.U.FONT_NAME = None
-CONF.U.FONT_SIZE = 48
 CONF.U.PLAYER_LABEL_POS = [
+    (780, 60),
     (780, 120),
-    (780, 200),
 ]
+CONF.U.PLAY_BTN_POS = {
+    'single': (780, 250),
+    'server': (780, 350),
+    'join': (780, 450),
+    'exit': (780, 550),
+}
 
 # Game
 CONF.G = _SN()
@@ -50,6 +55,7 @@ CONF.G.BOARD_HEIGHT = 8
 CONF.G.BOARD_SIZE = (CONF.G.BOARD_WIDTH, CONF.G.BOARD_HEIGHT)
 CONF.G.MAX_PLAYERS = 2
 CONF.G.MAX_AUDIENCES = 10
+CONF.G.UPDATE_EVENT = _pygame.USEREVENT + 1
 
 SERVER_HOST = '192.168.31.30'
 SERVER_PORT = 5555
