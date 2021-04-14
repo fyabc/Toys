@@ -18,7 +18,7 @@ class PlayerInfo:
         self.id = player_id
         self.name = ''
         self.win_state = None
-        self.color = PLAYER_COLORS[self.id]
+        self.color = CONF.U.PLAYER_COLORS[self.id]
 
     def state_dict(self):
         return {
@@ -43,7 +43,7 @@ class ServerGameState:
 
     def new_player(self, name):
         with self.lock:
-            available_player = set(range(MAX_PLAYERS)) - self.players.keys()
+            available_player = set(range(CONF.G.MAX_PLAYERS)) - self.players.keys()
             assert available_player, 'No available player'
             player_id = random.choice(list(available_player))
             self.players[player_id] = PlayerInfo(player_id)
