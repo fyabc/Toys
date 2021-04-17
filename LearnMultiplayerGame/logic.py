@@ -12,7 +12,7 @@ from constants import *
 
 
 class PlayerInfo:
-    ALL_STATUS = ['waiting', 'running', 'win', 'lose']
+    ALL_STATUS = ['waiting', 'playing', 'win', 'lose', 'draw']
 
     def __init__(self, id: int, ip_address: str, name: str, color: tuple, status: str = 'waiting'):
         self.id = id
@@ -24,31 +24,35 @@ class PlayerInfo:
     def state_dict(self):
         return self.__dict__.copy()
 
+    def game_end(self):
+        return self.status in {'win', 'lose', 'draw'}
+
 
 class Board:
     def __init__(self, width, height):
         self._width = width
         self._height = height
-        self.board = []     # type: List[List[Optional[int]]]
+        self._board = []  # type: List[List[Optional[int]]]
 
     @classmethod
     def from_board(cls, board: List[List[Optional[int]]], copy=True):
         width, height = len(board[0]), len(board)
         instance = cls(width, height)
-        if copy:
-            instance.board = deepcopy(board)
-        else:
-            instance.board = board
+        instance.reset(board, copy=copy)
         return instance
 
     def reset(self, board=None, copy=True):
         if board is None:
-            self.board = [[None for _ in range(self.width)] for _ in range(self.height)]
+            self._board = [[None for _ in range(self.width)] for _ in range(self.height)]
         else:
             if copy:
-                self.board = deepcopy(board)
+                self._board = deepcopy(board)
             else:
-                self.board = board
+                self._board = board
+
+    @property
+    def board(self):
+        return self._board
 
     @property
     def width(self):
@@ -60,20 +64,26 @@ class Board:
 
     def __getitem__(self, key):
         i, j = key  # type: int, int
-        return self.board[i][j]
+        return self._board[i][j]
 
     def __setitem__(self, key, value):
         i, j = key  # type: int, int
-        self.board[i][j] = value
+        self._board[i][j] = value
+
+    def start_game(self):
+        i2 = self.width // 2
+        j2 = self.height // 2
+        self[i2 - 1, j2 - 1] = self[i2, j2] = 0
+        self[i2, j2 - 1] = self[i2 - 1, j2] = 1
 
     def n_empty(self):
-        return sum(sum(p is None for p in row) for row in self.board)
+        return sum(sum(p is None for p in row) for row in self._board)
 
     def count_players(self):
         counter = Counter()
-        for row in self.board:
+        for row in self._board:
             counter.update(row)
-        counter.pop(None)
+        counter.pop(None, None)
         return counter
 
     def update(self, i: int, j: int, p: int):
@@ -85,28 +95,28 @@ class Board:
         j1 = j - 1
         while j1 >= 0 and _valid(i, j1):
             j1 -= 1
-        if j1 >= 0 and self[i, j1] == p:
+        if j1 >= 0 and j1 != j - 1 and self[i, j1] == p:
             for jj in range(j1 + 1, j):
                 self[i, jj] = p
 
         j1 = j + 1
         while j1 < self.width and _valid(i, j1):
             j1 += 1
-        if j1 < self.width and self[i, j1] == p:
+        if j1 < self.width and j1 != j + 1 and self[i, j1] == p:
             for jj in range(j + 1, j1):
                 self[i, jj] = p
 
         i1 = i - 1
         while i1 >= 0 and _valid(i1, j):
             i1 -= 1
-        if i1 >= 0 and self[i1, j] == p:
+        if i1 >= 0 and i1 != i - 1 and self[i1, j] == p:
             for ii in range(i1 + 1, i):
                 self[ii, j] = p
 
         i1 = i + 1
         while i1 < self.height and _valid(i1, j):
             i1 += 1
-        if i1 < self.height and self[i1, j] == p:
+        if i1 < self.height and i1 != i + 1 and self[i1, j] == p:
             for ii in range(i + 1, i1):
                 self[ii, j] = p
 
@@ -114,7 +124,7 @@ class Board:
         while i2 < self.height and j2 < self.width and _valid(i2, j2):
             i2 += 1
             j2 += 1
-        if i2 < self.height and j2 < self.width and self[i2, j2] == p:
+        if i2 < self.height and j2 < self.width and i2 != i + 1 and self[i2, j2] == p:
             for ii, jj in zip(range(i + 1, i2), range(j + 1, j2)):
                 self[ii, jj] = p
 
@@ -122,7 +132,7 @@ class Board:
         while i2 >= 0 and j2 >= 0 and _valid(i2, j2):
             i2 -= 1
             j2 -= 1
-        if i2 >= 0 and j2 >= 0 and self[i2, j2] == p:
+        if i2 >= 0 and j2 >= 0 and i2 != i - 1 and self[i2, j2] == p:
             for ii, jj in zip(range(i2 + 1, i), range(j2 + 1, j)):
                 self[ii, jj] = p
 
@@ -130,7 +140,7 @@ class Board:
         while i2 < self.height and j2 >= 0 and _valid(i2, j2):
             i2 += 1
             j2 -= 1
-        if i2 < self.height and j2 >= 0 and self[i2, j2] == p:
+        if i2 < self.height and j2 >= 0 and i2 != i + 1 and self[i2, j2] == p:
             for ii, jj in zip(range(i + 1, i2), range(j - 1, j2, -1)):
                 self[ii, jj] = p
 
@@ -138,26 +148,94 @@ class Board:
         while i2 >= 0 and j2 < self.width and _valid(i2, j2):
             i2 -= 1
             j2 += 1
-        if i2 >= 0 and j2 < self.width and self[i2, j2] == p:
+        if i2 >= 0 and j2 < self.width and i2 != i - 1 and self[i2, j2] == p:
             for ii, jj in zip(range(i - 1, i2, -1), range(j + 1, j2)):
                 self[ii, jj] = p
-
-        # TODO: Diagonals.
 
     def iter_board(self):
         for i in range(self.height):
             for j in range(self.width):
                 yield i, j, self[i, j]
 
+    def valid_pos(self, p: int):
+        """Yield valid positions for one player."""
+
+        def _valid(_i, _j):
+            return self[_i, _j] is not None and self[_i, _j] != p
+
+        for i, j, p_here in self.iter_board():
+            if p_here is not None:
+                continue
+
+            j1 = j - 1
+            while j1 >= 0 and _valid(i, j1):
+                j1 -= 1
+            if j1 >= 0 and j1 != j - 1 and self[i, j1] == p:
+                yield i, j
+                continue
+
+            j1 = j + 1
+            while j1 < self.width and _valid(i, j1):
+                j1 += 1
+            if j1 < self.width and j1 != j + 1 and self[i, j1] == p:
+                yield i, j
+                continue
+
+            i1 = i - 1
+            while i1 >= 0 and _valid(i1, j):
+                i1 -= 1
+            if i1 >= 0 and i1 != i - 1 and self[i1, j] == p:
+                yield i, j
+                continue
+
+            i1 = i + 1
+            while i1 < self.height and _valid(i1, j):
+                i1 += 1
+            if i1 < self.height and i1 != i + 1 and self[i1, j] == p:
+                yield i, j
+                continue
+
+            i2, j2 = i + 1, j + 1
+            while i2 < self.height and j2 < self.width and _valid(i2, j2):
+                i2 += 1
+                j2 += 1
+            if i2 < self.height and j2 < self.width and i2 != i + 1 and self[i2, j2] == p:
+                yield i, j
+                continue
+
+            i2, j2 = i - 1, j - 1
+            while i2 >= 0 and j2 >= 0 and _valid(i2, j2):
+                i2 -= 1
+                j2 -= 1
+            if i2 >= 0 and j2 >= 0 and i2 != i - 1 and self[i2, j2] == p:
+                yield i, j
+                continue
+
+            i2, j2 = i + 1, j - 1
+            while i2 < self.height and j2 >= 0 and _valid(i2, j2):
+                i2 += 1
+                j2 -= 1
+            if i2 < self.height and j2 >= 0 and i2 != i + 1 and self[i2, j2] == p:
+                yield i, j
+                continue
+
+            i2, j2 = i - 1, j + 1
+            while i2 >= 0 and j2 < self.width and _valid(i2, j2):
+                i2 -= 1
+                j2 += 1
+            if i2 >= 0 and j2 < self.width and i2 != i - 1 and self[i2, j2] == p:
+                yield i, j
+                continue
+
 
 class GameState:
     def __init__(self):
-        self.board = Board(CONF.G.BOARD_WIDTH, CONF.G.BOARD_HEIGHT)     # type: Board
+        self.board = Board(CONF.G.BOARD_WIDTH, CONF.G.BOARD_HEIGHT)  # type: Board
         self.current_player_id = 0
-        self.players = [None for _ in range(CONF.G.MAX_PLAYERS)]   # type: list[Optional[PlayerInfo]]
+        self.players = [None for _ in range(CONF.G.MAX_PLAYERS)]  # type: list[Optional[PlayerInfo]]
         self.audiences = []
 
-        self.current_pos = None    # type: Optional[tuple]
+        self.current_pos = None  # type: Optional[tuple]
 
         self.reset()
 
@@ -182,17 +260,18 @@ class GameState:
                         for info_state_dict in state_dict['players']]
         self.current_pos = state_dict['current_pos']
 
+    def game_end(self):
+        return any(p and p.game_end() for p in self.players)
+
 
 class ServerGameState(GameState):
     def server_game_start(self):
         n_players = len(self.players)
         assert n_players == 2
         self.current_player_id = 0
-
-        i2 = CONF.G.BOARD_WIDTH // 2
-        j2 = CONF.G.BOARD_HEIGHT // 2
-        self.board[i2 - 1, j2 - 1] = self.board[i2, j2] = 0
-        self.board[i2, j2 - 1] = self.board[i2 - 1, j2] = 1
+        self.board.start_game()
+        for p in self.players:
+            p.status = 'playing'
 
     def _next_player(self):
         self.current_player_id = (self.current_player_id + 1) % len(self.players)
@@ -202,10 +281,21 @@ class ServerGameState(GameState):
         self.board.update(i, j, player_id)
 
         # Count pieces.
-        piece_counts = self.board.count_players()
         n_empty = self.board.n_empty()
         if n_empty == 0:
-            pass
+            piece_counts = self.board.count_players()
+            most_common = piece_counts.most_common()
+            winner_count = most_common[0][1]
+            winners = [p for p, c in most_common if c == winner_count]
+            if len(winners) > 1:
+                win = 'draw'
+            else:
+                win = 'win'
+            for p in self.players:
+                if p.id in winners:
+                    p.status = win
+                else:
+                    p.status = 'lose'
 
     def take_action(self, action: dict) -> dict:
         a_type = action['type']
@@ -218,7 +308,7 @@ class ServerGameState(GameState):
                 ip_address=action['ip_address'],
                 name=action['name'],
                 color=CONF.U.PLAYER_COLORS[player_id],
-                status='playing',
+                status='waiting',
             )
             self.players[player_id] = player
             if all(self.players):
@@ -226,6 +316,8 @@ class ServerGameState(GameState):
         elif a_type == 'play':
             self._update_board(action['i'], action['j'], action['player_id'])
             self._next_player()
+        elif a_type == 'reset':
+            self.reset()
         else:
             raise RuntimeError(f'Unknown action type {a_type}')
         return self.state_dict()

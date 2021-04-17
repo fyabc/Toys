@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+import logging
 import math
 from typing import List
 
@@ -19,7 +20,7 @@ class ChessPiece(Widget):
         super().__init__(**kwargs)
         self.center = kwargs.get('center', self.center)
         self.color = kwargs.get('color', THECOLORS['black'])
-        self.border_width = kwargs.get('border_width', 2)
+        self.border_width = kwargs.get('border_width', 2.5)
         self.border_color = kwargs.get('border_color', THECOLORS['black'])
         self.callback = kwargs.get('callback', None)
 
@@ -66,6 +67,8 @@ class OthelloWorld(Widget):
 
         def _callback_factory(i, j):
             def _callback(pos, button, i=i, j=j):
+                if self.game.status != 'running':
+                    return False
                 self.game.take_action({
                     'type': 'play',
                     'i': i, 'j': j,
@@ -78,26 +81,43 @@ class OthelloWorld(Widget):
             self.add_child(ChessPiece(
                 center=_piece_pos(i, j),
                 width=2 * _piece_radius, height=2 * _piece_radius,
-                color=THECOLORS['white'], border_width=2.5,
+                color=THECOLORS['white'],
                 visible=False, callback=_callback_factory(i, j),
             ))
             for j in range(CONF.G.BOARD_WIDTH)
         ] for i in range(CONF.G.BOARD_HEIGHT)]
 
         self.player_labels = {
-            0: Label(
-                text='玩家0', font_size=48,
+            0: self.add_child(Label(
+                text='玩家0',
                 color=THECOLORS['red'],
                 center=CONF.U.PLAYER_LABEL_POS[0],
-            ),
-            1: Label(
-                text='玩家1', font_size=48,
+            )),
+            1: self.add_child(Label(
+                text='玩家1',
                 color=THECOLORS['blue'],
                 center=CONF.U.PLAYER_LABEL_POS[1],
-            ),
+            )),
         }
-        for player in self.player_labels.values():
-            self.add_child(player)
+        self.player_status_labels = {
+            0: self.add_child(Label(
+                text='胜', color=THECOLORS['black'],
+                center=(CONF.U.CURR_PLAYER_LABEL_X, CONF.U.PLAYER_LABEL_POS[0][1]),
+                visible=False,
+            )),
+            1: self.add_child(Label(
+                text='胜', color=THECOLORS['black'],
+                center=(CONF.U.CURR_PLAYER_LABEL_X, CONF.U.PLAYER_LABEL_POS[1][1]),
+                visible=False,
+            )),
+        }
+
+        self.current_player_tag = self.add_child(ChessPiece(
+            color=THECOLORS['black'],
+            width=2 * _piece_radius, height=2 * _piece_radius,
+            visible=False,
+        ))
+        self.current_player_tag.center_x = CONF.U.CURR_PLAYER_LABEL_X
 
         self.single_start_btn = self.add_child(ReverseColorButton(
             text='单机启动', font_size=48,
@@ -127,22 +147,44 @@ class OthelloWorld(Widget):
     def on_update(self, state_dict):
         state = self.game.state
         board = state.board
+        valid_pos = set(board.valid_pos(state.current_player_id))
+
         for i, j, p in board.iter_board():
             piece = self.board_pieces[i][j]
 
             if p is None:
                 piece.visible = False
+
+                piece.disabled = (i, j) not in valid_pos
             else:
                 piece.visible = True
                 piece.disabled = True
                 piece.color = state.players[p].color
 
-        counter = board.count_players()
-        for i, label in self.player_labels.items():
-            if self.game.status == 'running':
+        if self.game.status == 'running':
+            self.current_player_tag.visible = True
+            self.current_player_tag.center_y = CONF.U.PLAYER_LABEL_POS[state.current_player_id][1]
+            self.current_player_tag.color = CONF.U.PLAYER_COLORS[state.current_player_id]
+
+            counter = board.count_players()
+            for i, label in self.player_labels.items():
                 label.text = f'玩家{i}：{counter[i]}'
-            else:
+        else:
+            self.current_player_tag.visible = False
+            for i, label in self.player_labels.items():
                 label.text = f'玩家{i}'
+
+            for i, label in self.player_status_labels.items():
+                ps = state.players[i].status
+                _d = {
+                    'win': '胜', 'lose': '负', 'draw': '平',
+                }
+                ps_str = _d.get(ps, None)
+                if ps_str is None:
+                    label.visible = False
+                else:
+                    label.visible = True
+                    label.text = ps_str
 
     def _draw(self, win: pygame.Surface, dt: int):
         win.fill(THECOLORS['white'])
@@ -216,6 +258,8 @@ class Game:
 
     def finalize(self):
         self.status = 'idle'
+        if self.server is not None:
+            self.server.stop()
         self.ui.finalize()
 
     def run(self):
@@ -238,17 +282,27 @@ class Game:
         finally:
             self.finalize()
 
+    def update_game_status(self):
+        if self.state.game_end():
+            self.status = 'idle'
+
     def take_action(self, action: dict):
-        if action['type'] != 'init' and self.status != 'running':
+        logging.debug(f'take action: status={self.status}, action={action}')
+        if action['type'] not in {'init', 'reset'} and self.status != 'running':
             return
 
         server_reply = self.client.send_action(action)
         self.state.load_state_dict(server_reply)
+        self.update_game_status()
         utils.push_event(CONF.G.UPDATE_EVENT, state_dict=server_reply)
 
     def single_start(self, pos, button):
-        self.server = server.LocalServer()
-        self.client = client.LocalClient(self.server)
+        if self.server is None:
+            self.server = server.LocalThreadingServer()
+        else:
+            self.take_action({'type': 'reset'})
+        if self.client is None:
+            self.client = client.LocalClient(self.server)
         self.take_action({'type': 'init', 'ip_address': '', 'name': '玩家0'})
         self.take_action({'type': 'init', 'ip_address': '', 'name': '玩家1'})
         self.status = 'running'
@@ -264,6 +318,10 @@ class Game:
 
 
 def main():
+    logging.basicConfig(
+        level=logging.DEBUG,
+    )
+
     game = Game()
     game.run()
 

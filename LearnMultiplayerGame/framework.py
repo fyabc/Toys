@@ -79,6 +79,22 @@ class Widget(EventDispatcher):
         self.y = y - self.height / 2
 
     @property
+    def center_x(self):
+        return self.x + self.width / 2
+
+    @center_x.setter
+    def center_x(self, value):
+        self.x = value - self.width / 2
+
+    @property
+    def center_y(self):
+        return self.y + self.height / 2
+
+    @center_y.setter
+    def center_y(self, value):
+        self.y = value - self.height / 2
+
+    @property
     def rect(self):
         return pygame.rect.Rect(self.x, self.y, self.width, self.height)
 
