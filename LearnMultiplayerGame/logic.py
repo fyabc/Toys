@@ -6,19 +6,23 @@
 import random
 from collections import Counter
 from copy import deepcopy
-from dataclasses import dataclass, asdict
 from typing import List, Optional
 
 from constants import *
 
 
-@dataclass
 class PlayerInfo:
-    id: int
-    ip_address: str
-    name: str
-    color: tuple
-    status: str
+    ALL_STATUS = ['waiting', 'running', 'win', 'lose']
+
+    def __init__(self, id: int, ip_address: str, name: str, color: tuple, status: str = 'waiting'):
+        self.id = id
+        self.ip_address = ip_address
+        self.name = name
+        self.color = color
+        self.status = status
+
+    def state_dict(self):
+        return self.__dict__.copy()
 
 
 class Board:
@@ -71,7 +75,7 @@ class Board:
             counter.update(row)
         counter.pop(None)
         return counter
-    
+
     def update(self, i: int, j: int, p: int):
         self[i, j] = p
 
@@ -167,7 +171,7 @@ class GameState:
         return {
             'current_player_id': self.current_player_id,
             'board': self.board.board,
-            'players': [None if info is None else asdict(info) for info in self.players],
+            'players': [None if info is None else info.state_dict() for info in self.players],
             'current_pos': self.current_pos,
         }
 
