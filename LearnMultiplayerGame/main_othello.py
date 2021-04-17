@@ -271,7 +271,7 @@ class OthelloWorld(Widget):
             for j in range(CONF.G.BOARD_WIDTH)
         ] for i in range(CONF.G.BOARD_HEIGHT)]
 
-        self.players = {
+        self.player_labels = {
             0: Label(
                 text='玩家0', font_size=48,
                 color=THECOLORS['red'],
@@ -283,7 +283,7 @@ class OthelloWorld(Widget):
                 center=CONF.U.PLAYER_LABEL_POS[1],
             ),
         }
-        for player in self.players.values():
+        for player in self.player_labels.values():
             self.add_child(player)
 
         self.single_start_btn = self.add_child(ReverseColorButton(
@@ -313,17 +313,23 @@ class OthelloWorld(Widget):
 
     def on_update(self, state_dict):
         state = self.game.state
-        for i in range(len(state.board)):
-            for j in range(len(state.board[0])):
-                cell = state.board[i][j]
-                piece = self.board_pieces[i][j]
+        board = state.board
+        for i, j, p in board.iter_board():
+            piece = self.board_pieces[i][j]
 
-                if cell is None:
-                    piece.visible = False
-                else:
-                    piece.visible = True
-                    piece.disabled = True
-                    piece.color = state.players[cell].color
+            if p is None:
+                piece.visible = False
+            else:
+                piece.visible = True
+                piece.disabled = True
+                piece.color = state.players[p].color
+
+        counter = board.count_players()
+        for i, label in self.player_labels.items():
+            if self.game.status == 'running':
+                label.text = f'玩家{i}：{counter[i]}'
+            else:
+                label.text = f'玩家{i}'
 
     def _draw(self, win: pygame.Surface, dt: int):
         win.fill(THECOLORS['white'])
