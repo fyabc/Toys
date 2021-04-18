@@ -35,7 +35,6 @@ class ServerGameState:
         self.current_player = 0
         self.observers = set()
         self.running = False
-        self.board = [[None for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
         self.lock = threading.Lock()
 
     def reset(self):
@@ -58,19 +57,7 @@ class ServerGameState:
             },
             'current_player': self.current_player,
             'running': self.running,
-            'board': self.board,
         }
-
-    def update(self, player_id, i, j):
-        with self.lock:
-            self.board[i][j] = player_id
-
-        # TODO: Update by othello rule.
-
-    def check_winner(self):
-        n_empty_cells = sum(sum(item is None for item in row) for row in self.board)
-        if n_empty_cells == 0:
-            pass
 
 
 def othello_server_thread(conn: socket.socket, addr: tuple, state: ServerGameState):

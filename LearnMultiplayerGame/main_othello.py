@@ -9,8 +9,8 @@ import pygame
 
 import logic
 import utils
-import server
-import client
+import server_2 as server
+import client_2 as client
 from framework import Widget, Label, ReverseColorButton
 from constants import *
 

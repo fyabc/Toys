@@ -33,8 +33,8 @@ class LocalThreadingServer(Server):
 
     def __init__(self):
         super().__init__()
-        self.in_queue = Queue()
-        self.out_queue = Queue()
+        self.recv_queue = Queue()
+        self.send_queue = Queue()
 
         self.running = threading.Event()
         self.running.set()
@@ -43,24 +43,24 @@ class LocalThreadingServer(Server):
 
     def _run(self):
         while self.running.is_set():
-            action = self.in_queue.get()
+            action = self.recv_queue.get(block=True)
             if action == self._TERMINATE_THREAD_EVENT:
                 break
             reply = self.state.take_action(action)
-            self.out_queue.put(reply)
+            self.send_queue.put(reply)
 
     def receive_action(self, action: dict) -> dict:
         if not self.running:
             logging.critical('server not running')
             return self.state.state_dict()
 
-        self.in_queue.put(action)
-        server_reply = self.out_queue.get()
+        self.recv_queue.put(action)
+        server_reply = self.send_queue.get()
         return server_reply
 
     def stop(self):
         self.running.clear()
-        self.in_queue.put(self._TERMINATE_THREAD_EVENT)
+        self.recv_queue.put(self._TERMINATE_THREAD_EVENT)
 
 
 class SocketThreadingServer(Server):
