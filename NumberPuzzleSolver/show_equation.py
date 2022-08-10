@@ -7,7 +7,7 @@ import argparse
 import re
 
 
-_PAT_EQU = re.compile(r'([0-9]+)([+\-*/])([0-9]+)')
+_PAT_EQU = re.compile(r'(\d+)([+\-*/])(\d+)')
 
 
 def _len(n: int):
@@ -51,7 +51,6 @@ def _mul(a: int, b: int):
 
 def _div(a: int, b: int):
     c = a // b
-    d = a % b
 
     width = _len(b) + 1 + _len(a)
 

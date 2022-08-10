@@ -1,0 +1,15 @@
+# Equation type
+@type mul
+
+# Puzzle content
+@content
+      ? 5
+    * ? ?
+    -----
+      7 ?
+  ? 0 ?
+  -------
+  2 ? ? ?
+@endcontent
+
+# Extra constraints

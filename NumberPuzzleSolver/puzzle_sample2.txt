@@ -1,0 +1,18 @@
+# Equation type
+@type mul
+
+# Puzzle content
+@content
+      ? ? ?
+    * ? ? ?
+    -------
+    ? ? 5 3
+  1 ? ? ?
+  ? ? 4
+-----------
+? ? ? ? ? ?
+@endcontent
+
+# Extra constraints
+
+# Result (total 1): 417 * 249 = 103833
