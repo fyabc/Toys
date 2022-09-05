@@ -1,0 +1,21 @@
+# Sample script for Fly language.
+
+3.to 7 do (i) {
+    print(i)
+}
+
+4.times do {
+    print('Hello')
+}
+
+def linear(a, b) = a * $ + b
+
+linear_gen10 = do (a, b) = (a * i + b for i in range(10))
+
+linear_gen10_2 = do (a, b) {
+    (a * i + b for i in range(10))
+}
+
+f_empty_dict = do = {}
+
+add_2 = $1 + $2

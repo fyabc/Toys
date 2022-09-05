@@ -41,6 +41,8 @@ with llvm.create_mcjit_compiler(llvm_module, tm) as ee:
     ee.finalize_object()
     print('=== Assembly')
     print(tm.emit_assembly(llvm_module))
+    # print('=== Object')
+    # print(tm.emit_object(llvm_module))
 
     # Obtain a pointer to the compiled 'sum' - it's the address of its JITed
     # code in memory.

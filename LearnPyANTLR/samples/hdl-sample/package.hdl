@@ -1,0 +1,91 @@
+# Package metadata.
+@metadata {
+    package: "DIY-001",
+    author: "fyabc",
+    version: "1.0.0",
+    date: "",
+}
+
+# Import cards from other packages.
+# Name "D1" will be automatically converted to "DIY-002.D1".
+@import "D1" from "./DIY-002"
+
+# Define cards.
+
+# Neutral
+
+minion {
+    id: @iota,  # Auto increment ID.
+    class: Neutral,     # Constants in UpperSnakeCase.
+    rarity: Common,
+    keywords: [
+        "battlecry", "deathrattle",
+    ],
+    attributes: [4, 4, 4],
+    effect: {
+        # Quick define by keywords and common operations.
+        battlecry: draw(1),
+        deathrattle: draw(1),
+
+        # Extra code block extension. Default to ("Python", "3.7").
+        code: @code("Python", "3.7") {
+            def aura(self):
+                return None
+        }
+    },
+}
+
+# DemonHunter
+
+card {
+    # Another method to define minions.
+    type: Minion,
+    alias = "XX",         # Alias for other cards to refer this card.
+    class: DemonHunter,
+    rarity: Rare,
+    attributes: [4, 3, 3],
+
+    # Automatically generate ["battlecry"] keyword list from effect.
+    # This is the default action.
+    keywords: @auto,
+
+    effect: {
+        battlecry: summon {
+            list: ["DIY-002.D1", "DIY-002.D1"], # Summon two D1.
+            positions: [-1, 1], # Summon at left and right of this minion.
+        },
+    },
+}
+
+# Druid
+
+# Spell example.
+spell {
+    class: Druid,
+    rarity: Epic,
+    attributes: [7],
+    effect: {
+        cast: @pass     # Example for to-do placeholder.
+    },
+}
+
+# Hunter
+# Mage
+# Paladin
+# Priest
+# Rogue
+# Shaman
+# Warlock
+# Warrior
+
+# Derivatives
+
+minion {
+    id: "D1",   # Derivative ID
+    derivative: true,
+    rarity: common,
+    attributes: [2, 2, 2],
+
+    # Minion types
+    mtypes: ["elemental"],
+}
